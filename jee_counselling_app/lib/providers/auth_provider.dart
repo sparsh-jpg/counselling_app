@@ -1,35 +1,32 @@
 import 'package:flutter/foundation.dart';
-import 'dart:math';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/mentors/models/app_user_model.dart';
-import '../services/storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final StorageService _storage = StorageService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   AppUser? _currentUser;
   bool _isLoading = false;
   String? _error;
-  
-  // Added the missing initialization flag here
   bool _isInitialized = false;
 
   AppUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  
-  // Added the getter so main.dart can read it
   bool get isInitialized => _isInitialized;
-  
   bool get isLoggedIn => _currentUser != null;
   bool get isMentor => _currentUser?.role == UserRole.mentor;
   bool get isStudent => _currentUser?.role == UserRole.student;
+  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
 
   Future<void> init() async {
-    _currentUser = await _storage.getLoggedInUser();
-    
-    // Set to true after loading from storage
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser != null) {
+      _currentUser = await _fetchUserFromFirestore(firebaseUser.uid);
+    }
     _isInitialized = true;
-    
     notifyListeners();
   }
 
@@ -38,10 +35,8 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     required UserRole role,
-    // Student fields
     int? jeeRank,
     String? jeeType,
-    // Mentor fields
     String? college,
     String? branch,
     int? year,
@@ -55,36 +50,54 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final exists = await _storage.emailExists(email);
-    if (exists) {
-      _error = 'An account with this email already exists.';
+    try {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final uid = cred.user!.uid;
+
+      final userData = {
+        'id': uid,
+        'name': name,
+        'email': email,
+        'role': role == UserRole.student ? 'student' : 'mentor',
+        'createdAt': FieldValue.serverTimestamp(),
+        if (role == UserRole.student) ...{
+          'jeeRank': jeeRank,
+          'jeeType': jeeType ?? 'JEE Main',
+        },
+        if (role == UserRole.mentor) ...{
+          'college': college ?? '',
+          'branch': branch ?? '',
+          'year': year,
+          'expertise': expertise ?? [],
+          'sessionPrice': sessionPrice ?? 0,
+          'mentorJeeRank': mentorJeeRank,
+          'mentorJeeType': mentorJeeType ?? 'JEE Main',
+          'bio': bio ?? '',
+        },
+      };
+
+      await _db.collection('users').doc(uid).set(userData);
+      await cred.user!.sendEmailVerification();
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+
+    } on FirebaseAuthException catch (e) {
+      _error = _friendlyAuthError(e.code);
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Registration failed. Please try again.';
       _isLoading = false;
       notifyListeners();
       return false;
     }
-
-    final user = AppUser(
-      id: _generateId(),
-      name: name,
-      email: email,
-      passwordHash: _hashPassword(password),
-      role: role,
-      jeeRank: jeeRank,
-      jeeType: jeeType,
-      college: college,
-      branch: branch,
-      year: year,
-      expertise: expertise ?? [],
-      sessionPrice: sessionPrice ?? 0,
-      mentorJeeRank: mentorJeeRank,
-      mentorJeeType: mentorJeeType,
-      bio: bio,
-    );
-
-    await _storage.saveUser(user);
-    _isLoading = false;
-    notifyListeners();
-    return true;
   }
 
   Future<bool> login({
@@ -96,39 +109,63 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final user = await _storage.getUserByEmail(email);
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-    if (user == null) {
-      _error = 'No account found with this email.';
+      final user = await _fetchUserFromFirestore(cred.user!.uid);
+
+      if (user == null) {
+        _error = 'User data not found. Please contact support.';
+        await _auth.signOut();
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      if (user.role != expectedRole) {
+        final wrongRole = user.role == UserRole.mentor ? 'Mentor' : 'Student';
+        _error = 'This account is registered as a $wrongRole.';
+        await _auth.signOut();
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      _currentUser = user;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+
+    } on FirebaseAuthException catch (e) {
+      _error = _friendlyAuthError(e.code);
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Login failed. Please try again.';
       _isLoading = false;
       notifyListeners();
       return false;
     }
+  }
 
-    if (user.role != expectedRole) {
-      _error =
-          'This account is registered as a ${user.role == UserRole.mentor ? "Mentor" : "Student"}.';
-      _isLoading = false;
-      notifyListeners();
-      return false;
+  Future<void> sendEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user != null && !user.emailVerified) {
+      await user.sendEmailVerification();
     }
+  }
 
-    if (user.passwordHash != _hashPassword(password)) {
-      _error = 'Incorrect password.';
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
-
-    _currentUser = user;
-    await _storage.saveLoggedInUser(user);
-    _isLoading = false;
+  Future<void> reloadUser() async {
+    await _auth.currentUser?.reload();
     notifyListeners();
-    return true;
   }
 
   Future<void> logout() async {
-    await _storage.logout();
+    await _auth.signOut();
     _currentUser = null;
     notifyListeners();
   }
@@ -138,17 +175,51 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _generateId() {
-    final rand = Random();
-    return DateTime.now().millisecondsSinceEpoch.toString() +
-        rand.nextInt(9999).toString();
+  Future<AppUser?> _fetchUserFromFirestore(String uid) async {
+    try {
+      final doc = await _db.collection('users').doc(uid).get();
+      if (!doc.exists) return null;
+      final data = doc.data()!;
+      return AppUser(
+        id: uid,
+        name: data['name'] ?? '',
+        email: data['email'] ?? '',
+        passwordHash: '',
+        role: data['role'] == 'mentor' ? UserRole.mentor : UserRole.student,
+        jeeRank: data['jeeRank'],
+        jeeType: data['jeeType'],
+        college: data['college'],
+        branch: data['branch'],
+        year: data['year'],
+        expertise: List<String>.from(data['expertise'] ?? []),
+        sessionPrice: data['sessionPrice'] ?? 0,
+        mentorJeeRank: data['mentorJeeRank'],
+        mentorJeeType: data['mentorJeeType'],
+        bio: data['bio'],
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
-  String _hashPassword(String password) {
-    int hash = 0;
-    for (var ch in password.codeUnits) {
-      hash = (hash * 31 + ch) & 0xFFFFFFFF;
+  String _friendlyAuthError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'An account with this email already exists.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'No internet connection.';
+      default:
+        return 'Something went wrong. Please try again.';
     }
-    return hash.toRadixString(16);
   }
 }
