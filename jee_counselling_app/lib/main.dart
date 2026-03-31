@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/connection_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
@@ -7,10 +9,13 @@ import 'screens/mentor_dashboard/mentor_dashboard_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/video_call/video_call_screen.dart';
 import 'screens/mentors/models/connection_model.dart';
-import 'screens/role_selection_screen.dart'; // Re-added your role selection screen
+import 'screens/role_selection_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -64,8 +69,7 @@ class _AppEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    
-    // 1. Wait for SharedPreferences to load from the device (Persistent login fix)
+
     if (!auth.isInitialized) {
       return const Scaffold(
         backgroundColor: Color(0xFF0A0A1A),
@@ -75,14 +79,12 @@ class _AppEntry extends StatelessWidget {
       );
     }
 
-    // 2. Once loaded, if logged in, route to the correct Dashboard
     if (auth.isLoggedIn) {
       return auth.isMentor
           ? const MentorDashboardScreen()
           : const DashboardScreen();
     }
-    
-    // 3. Not logged in -> Go to your Role Selection Screen (Restores your UI!)
-    return const RoleSelectionScreen(); 
+
+    return const RoleSelectionScreen();
   }
 }

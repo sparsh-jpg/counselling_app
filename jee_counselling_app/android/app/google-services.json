@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "782054312745",
+    "project_id": "jeeguide-47765",
+    "storage_bucket": "jeeguide-47765.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:782054312745:android:1ae55b0daa5cefa3c78538",
+        "android_client_info": {
+          "package_name": "com.example.jee_counselling_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "782054312745-btfru2sc9t1e5tleq9qa8t3eedgrgnpg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWgjBjQ6YUmnAmtbgAeYKSe-XhFzEIcaE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "782054312745-btfru2sc9t1e5tleq9qa8t3eedgrgnpg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
