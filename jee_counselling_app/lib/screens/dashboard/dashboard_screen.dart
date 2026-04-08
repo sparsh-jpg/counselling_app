@@ -11,6 +11,7 @@ import '../role_selection_screen.dart';
 import '../shared_widgets.dart';
 import '../../services/storage_service.dart';
 import '../../providers/connection_provider.dart';
+import '../profile/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -289,6 +290,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return const PredictorScreen();
               } else if (f.title == "Mentors") {
                 return const MentorsScreen();
+              } else if (f.title == "Profile") {
+                return const ProfileScreen();
               } else {
                 return Scaffold(
                   backgroundColor: const Color(0xFF02040A),

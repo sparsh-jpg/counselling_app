@@ -29,6 +29,9 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
   bool _obscure = true;
 
   static const _orange = Color(0xFF7C3AED);
+  static const _s1 = Color(0xFF0F172A);
+  static const _s2 = Color(0xFF1E293B);
+  static const _t3 = Color(0xFF94A3B8);
 
   void _submit() async {
     setState(() { _error = ''; _success = ''; });
@@ -126,36 +129,47 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
                       borderRadius: BorderRadius.circular(24),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _s1,
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-                            borderRadius: const BorderRadius.only(
-                              bottomLeft: Radius.circular(24),
-                              bottomRight: Radius.circular(24),
+                          child: Container(
+                            padding: const EdgeInsets.all(32),
+                            decoration: BoxDecoration(
+                              color: _s1.withValues(alpha: 0.6),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 30,
+                                  offset: const Offset(0, 10),
+                                )
+                              ],
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              GestureDetector(
-                                onTap: () => Navigator.pop(context),
-                                child: Text('← Back',
-                                    style: GoogleFonts.instrumentSans(color: _t3, fontSize: 13)),
-                              ),
-                              const SizedBox(height: 20),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _orange.withValues(alpha: 0.12),
-                                  border: Border.all(color: _orange.withValues(alpha: 0.25)),
-                                  borderRadius: BorderRadius.circular(999),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: GestureDetector(
+                                    onTap: () => Navigator.pop(context),
+                                    child: Text('← Back',
+                                        style: GoogleFonts.instrumentSans(color: _t3, fontSize: 14, fontWeight: FontWeight.w500)),
+                                  ),
                                 ),
-                                child: Text('MENTOR',
-                                    style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 10, color: _orange,
-                                        fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-                              ),
+                                const SizedBox(height: 24),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: _orange.withValues(alpha: 0.12),
+                                      border: Border.all(color: _orange.withValues(alpha: 0.3)),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text('MENTOR',
+                                        style: GoogleFonts.jetBrainsMono(
+                                            fontSize: 11, color: _orange,
+                                            fontWeight: FontWeight.w700, letterSpacing: 1.5)),
+                                  ),
+                                ),
                               const SizedBox(height: 10),
                               Text(_isLogin ? 'Welcome back' : 'Join as Mentor',
                                   style: GoogleFonts.syne(
@@ -204,6 +218,17 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
                                   child: Icon(_obscure ? Icons.visibility_off : Icons.visibility, size: 18, color: _t3),
                                 ),
                               ),
+                              if (_isLogin) ...[
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: GestureDetector(
+                                    onTap: authLoading ? null : _forgotPassword,
+                                    child: Text('Forgot Password?',
+                                        style: GoogleFonts.instrumentSans(color: _orange, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                              ],
                               if (_error.isNotEmpty) ...[
                                 const SizedBox(height: 10),
                                 Text(_error,

@@ -10,12 +10,13 @@
 // 3. Replace YOUR_AGORA_APP_ID with your App ID from console.agora.io
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-const String _agoraAppId = 'f8c840a984c54457b1f0e7c713cae746';
+const String _agoraAppId = 'b00cdf0604474f1795e7a018f826f8da';
 
 class VideoCallScreen extends StatefulWidget {
   final String channelName;
@@ -41,6 +42,8 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   bool _isCameraOff = false;
   bool _isConnecting = true;
 
+  String? _errorMsg;
+
   @override
   void initState() {
     super.initState();
@@ -48,45 +51,57 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   }
 
   Future<void> _initAgora() async {
-    await [Permission.microphone, Permission.camera].request();
+    try {
+      if (!kIsWeb) {
+        await [Permission.microphone, Permission.camera].request();
+      }
 
-    _engine = createAgoraRtcEngine();
-    await _engine!
-        .initialize(const RtcEngineContext(appId: _agoraAppId));
+      _engine = createAgoraRtcEngine();
+      await _engine!.initialize(const RtcEngineContext(
+        appId: _agoraAppId,
+        channelProfile: ChannelProfileType.channelProfileCommunication,
+      ));
 
-    _engine!.registerEventHandler(
-      RtcEngineEventHandler(
-        onJoinChannelSuccess: (connection, elapsed) {
-          setState(() {
-            _localUserJoined = true;
-            _isConnecting = false;
-          });
-        },
-        onUserJoined: (connection, remoteUid, elapsed) {
-          setState(() => _remoteUid = remoteUid);
-        },
-        onUserOffline: (connection, remoteUid, reason) {
-          setState(() => _remoteUid = null);
-          _showUserLeft();
-        },
-      ),
-    );
+      _engine!.registerEventHandler(
+        RtcEngineEventHandler(
+          onError: (err, msg) {
+            setState(() => _errorMsg = 'Error $err: $msg');
+          },
+          onJoinChannelSuccess: (connection, elapsed) {
+            setState(() {
+              _localUserJoined = true;
+              _isConnecting = false;
+            });
+          },
+          onUserJoined: (connection, remoteUid, elapsed) {
+            setState(() => _remoteUid = remoteUid);
+          },
+          onUserOffline: (connection, remoteUid, reason) {
+            setState(() => _remoteUid = null);
+            _showUserLeft();
+          },
+        ),
+      );
 
-    await _engine!.enableVideo();
-    await _engine!.startPreview();
+      try {
+        await _engine!.enableVideo();
+        await _engine!.startPreview();
+      } catch (videoError) {
+        // Webcam is probably locked by another tab (Device in use)
+        debugPrint("Camera locked by another process: $videoError");
+      }
 
-    await _engine!.joinChannel(
-      token: '',
-      channelId: widget.channelName,
-      uid: 0,
-      options: const ChannelMediaOptions(
-        autoSubscribeAudio: true,
-        autoSubscribeVideo: true,
-        publishCameraTrack: true,
-        publishMicrophoneTrack: true,
-        clientRoleType: ClientRoleType.clientRoleBroadcaster,
-      ),
-    );
+      int generatedUid = DateTime.now().millisecondsSinceEpoch.remainder(100000) + 1;
+      
+      await _engine!.joinChannel(
+        token: '',
+        channelId: widget.channelName,
+        uid: generatedUid,
+        options: const ChannelMediaOptions(),
+      );
+    } catch (e) {
+      setState(() => _errorMsg = 'Init Error: $e');
+    }
   }
 
   void _showUserLeft() {
@@ -208,7 +223,13 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                           fontWeight: FontWeight.w600,
                           fontSize: 16)),
                   const SizedBox(width: 8),
-                  if (_isConnecting)
+                  if (_errorMsg != null)
+                    Expanded(
+                      child: Text(_errorMsg!,
+                          style: GoogleFonts.poppins(
+                              color: Colors.red, fontSize: 10)),
+                    )
+                  else if (_isConnecting)
                     Text('Connecting...',
                         style: GoogleFonts.poppins(
                             color: Colors.white54, fontSize: 12))

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import '../screens/mentors/models/app_user_model.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -300,6 +301,52 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } catch (e) {
       _error = 'Login failed. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> resetPassword(String email) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _error = _friendlyAuthError(e.code);
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _error = 'Failed to send password reset email.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateProfile(AppUser updatedUser) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) throw Exception("User not logged in");
+      
+      await _db.collection('users').doc(uid).update(updatedUser.toJson());
+      
+      _currentUser = updatedUser;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to update profile.';
       _isLoading = false;
       notifyListeners();
       return false;
