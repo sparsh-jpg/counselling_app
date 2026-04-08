@@ -1,18 +1,15 @@
 import 'package:flutter/foundation.dart';
-import 'dart:async';
-import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../screens/mentors/models/app_user_model.dart';
-import '../services/storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final StorageService _storage = StorageService();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   AppUser? _currentUser;
   bool _isLoading = false;
   String? _error;
-  
-  // Added the missing initialization flag here
   bool _isInitialized = false;
 
   String? _verificationId;
@@ -21,20 +18,18 @@ class AuthProvider extends ChangeNotifier {
   AppUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  
-  // Added the getter so main.dart can read it
   bool get isInitialized => _isInitialized;
-  
   bool get isLoggedIn => _currentUser != null;
   bool get isMentor => _currentUser?.role == UserRole.mentor;
   bool get isStudent => _currentUser?.role == UserRole.student;
+  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
 
   Future<void> init() async {
-    _currentUser = await _storage.getLoggedInUser();
-    
-    // Set to true after loading from storage
+    final firebaseUser = _auth.currentUser;
+    if (firebaseUser != null) {
+      _currentUser = await _fetchUserFromFirestore(firebaseUser.uid);
+    }
     _isInitialized = true;
-    
     notifyListeners();
   }
 
@@ -194,10 +189,8 @@ class AuthProvider extends ChangeNotifier {
     required String email,
     required String password,
     required UserRole role,
-    // Student fields
     int? jeeRank,
     String? jeeType,
-    // Mentor fields
     String? college,
     String? branch,
     int? year,
@@ -212,43 +205,49 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Create the user in Firebase Auth
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(email: email, password: password);
-
-      // 2. Send the verification email natively through Firebase!
-      await userCredential.user?.sendEmailVerification();
-
-      // 3. Save the extra user details locally so the UI knows their role
-      final user = AppUser(
-        id: userCredential.user!.uid, // Use Firebase UID securely
-        name: name,
+      final cred = await _auth.createUserWithEmailAndPassword(
         email: email,
-        passwordHash: _hashPassword(password), // Legacy local fallback
-        role: role,
-        jeeRank: jeeRank,
-        jeeType: jeeType,
-        college: college,
-        branch: branch,
-        year: year,
-        expertise: expertise ?? [],
-        sessionPrice: sessionPrice ?? 0,
-        mentorJeeRank: mentorJeeRank,
-        mentorJeeType: mentorJeeType,
-        bio: bio,
+        password: password,
       );
 
-      await _storage.saveUser(user);
+      final uid = cred.user!.uid;
+
+      final userData = {
+        'id': uid,
+        'name': name,
+        'email': email,
+        'role': role == UserRole.student ? 'student' : 'mentor',
+        'createdAt': FieldValue.serverTimestamp(),
+        if (role == UserRole.student) ...{
+          'jeeRank': jeeRank,
+          'jeeType': jeeType ?? 'JEE Main',
+        },
+        if (role == UserRole.mentor) ...{
+          'college': college ?? '',
+          'branch': branch ?? '',
+          'year': year,
+          'expertise': expertise ?? [],
+          'sessionPrice': sessionPrice ?? 0,
+          'mentorJeeRank': mentorJeeRank,
+          'mentorJeeType': mentorJeeType ?? 'JEE Main',
+          'bio': bio ?? '',
+        },
+      };
+
+      await _db.collection('users').doc(uid).set(userData);
+      await cred.user!.sendEmailVerification();
+
       _isLoading = false;
       notifyListeners();
       return true;
+
     } on FirebaseAuthException catch (e) {
-      _error = e.message;
+      _error = _friendlyAuthError(e.code);
       _isLoading = false;
       notifyListeners();
       return false;
     } catch (e) {
-      _error = e.toString();
+      _error = 'Registration failed. Please try again.';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -265,96 +264,62 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Authenticate natively with Firebase Auth
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-      // 2. Enforce Email Verification!
-      if (userCredential.user != null && !userCredential.user!.emailVerified) {
-        _error = 'Please check your email inbox and verify your account first!';
+      final user = await _fetchUserFromFirestore(cred.user!.uid);
+
+      if (user == null) {
+        _error = 'User data not found. Please contact support.';
+        await _auth.signOut();
         _isLoading = false;
         notifyListeners();
-        
-        // Optionally resend the verification email just in case
-        await userCredential.user?.sendEmailVerification();
         return false;
       }
 
-      // 3. Load extra role details from our database
-      final user = await _storage.getUserByEmail(email);
-
-      if (user == null) {
-        // Auto-recover user from Firebase into local storage
-        final prefix = email.split('@')[0];
-        final generatedName = prefix[0].toUpperCase() + prefix.substring(1);
-
-        final recoveredUser = AppUser(
-          id: userCredential.user!.uid,
-          name: generatedName, 
-          email: email,
-          passwordHash: _hashPassword(password),
-          role: expectedRole,
-        );
-        await _storage.saveUser(recoveredUser);
-        
-        _currentUser = recoveredUser;
-        await _storage.saveLoggedInUser(recoveredUser);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      }
-
       if (user.role != expectedRole) {
-        _error =
-            'This account is registered as a ${user.role == UserRole.mentor ? "Mentor" : "Student"}.';
+        final wrongRole = user.role == UserRole.mentor ? 'Mentor' : 'Student';
+        _error = 'This account is registered as a $wrongRole.';
+        await _auth.signOut();
         _isLoading = false;
         notifyListeners();
         return false;
       }
 
       _currentUser = user;
-      await _storage.saveLoggedInUser(user);
       _isLoading = false;
       notifyListeners();
       return true;
+
     } on FirebaseAuthException catch (e) {
-      _error = e.message;
+      _error = _friendlyAuthError(e.code);
       _isLoading = false;
       notifyListeners();
       return false;
     } catch (e) {
-      _error = e.toString();
+      _error = 'Login failed. Please try again.';
       _isLoading = false;
       notifyListeners();
       return false;
     }
   }
 
-  Future<bool> resetPassword(String email) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } on FirebaseAuthException catch (e) {
-      _error = e.message;
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
-      return false;
+  Future<void> sendEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user != null && !user.emailVerified) {
+      await user.sendEmailVerification();
     }
+  }
+
+  Future<void> reloadUser() async {
+    await _auth.currentUser?.reload();
+    notifyListeners();
   }
 
   Future<void> logout() async {
-    await _storage.logout();
+    await _auth.signOut();
     _currentUser = null;
     notifyListeners();
   }
@@ -364,17 +329,51 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _generateId() {
-    final rand = Random();
-    return DateTime.now().millisecondsSinceEpoch.toString() +
-        rand.nextInt(9999).toString();
+  Future<AppUser?> _fetchUserFromFirestore(String uid) async {
+    try {
+      final doc = await _db.collection('users').doc(uid).get();
+      if (!doc.exists) return null;
+      final data = doc.data()!;
+      return AppUser(
+        id: uid,
+        name: data['name'] ?? '',
+        email: data['email'] ?? '',
+        passwordHash: '',
+        role: data['role'] == 'mentor' ? UserRole.mentor : UserRole.student,
+        jeeRank: data['jeeRank'],
+        jeeType: data['jeeType'],
+        college: data['college'],
+        branch: data['branch'],
+        year: data['year'],
+        expertise: List<String>.from(data['expertise'] ?? []),
+        sessionPrice: data['sessionPrice'] ?? 0,
+        mentorJeeRank: data['mentorJeeRank'],
+        mentorJeeType: data['mentorJeeType'],
+        bio: data['bio'],
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
-  String _hashPassword(String password) {
-    int hash = 0;
-    for (var ch in password.codeUnits) {
-      hash = (hash * 31 + ch) & 0xFFFFFFFF;
+  String _friendlyAuthError(String code) {
+    switch (code) {
+      case 'email-already-in-use':
+        return 'An account with this email already exists.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'weak-password':
+        return 'Password must be at least 6 characters.';
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'No internet connection.';
+      default:
+        return 'Something went wrong. Please try again.';
     }
-    return hash.toRadixString(16);
   }
 }

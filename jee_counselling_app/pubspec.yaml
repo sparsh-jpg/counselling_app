@@ -22,6 +22,9 @@ dependencies:
   shared_preferences: ^2.2.3
   agora_rtc_engine: ^6.5.3
   permission_handler: ^12.0.1
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
 
 dev_dependencies:
   flutter_test:
@@ -33,7 +36,3 @@ flutter:
 
   assets:
     - assets/cutoffs.json
-fl_chart: ^0.68.0
-shared_preferences: ^2.2.3
-agora_rtc_engine: ^6.3.2
-permission_handler: ^11.3.0

@@ -6,6 +6,7 @@ import 'dart:ui';
 import '../providers/auth_provider.dart';
 import 'mentors/models/app_user_model.dart';
 import 'dashboard/dashboard_screen.dart';
+import 'email_verification_screen.dart';
 import 'shared_widgets.dart';
 
 class StudentLoginScreen extends StatefulWidget {
@@ -38,19 +39,26 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
         setState(() => _error = 'Please fill in all fields.');
         return;
       }
+
       final success = await auth.login(
         email: _emailC.text.trim(),
         password: _passwordC.text.trim(),
         expectedRole: UserRole.student,
       );
       if (!mounted) return;
+
       if (success) {
-        TextInput.finishAutofillContext();
-        Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
+        if (!auth.isEmailVerified) {
+          Navigator.pushReplacement(context,
+              MaterialPageRoute(builder: (_) => const EmailVerificationScreen()));
+        } else {
+          Navigator.pushReplacement(context,
+              MaterialPageRoute(builder: (_) => const DashboardScreen()));
+        }
       } else {
         setState(() => _error = auth.error ?? 'Invalid email or password.');
       }
+
     } else {
       if (_firstNameC.text.isEmpty || _lastNameC.text.isEmpty ||
           _emailC.text.isEmpty || _rankC.text.isEmpty ||
@@ -67,20 +75,11 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
         jeeRank: int.tryParse(_rankC.text.trim()),
       );
       if (!mounted) return;
+
       if (success) {
-        TextInput.finishAutofillContext();
-        final savedEmail = _emailC.text;
-        setState(() {
-          _isLogin = true;
-          _success = 'Account created! A verification link was sent to your email. Please verify, then Log in.';
-          _error = '';
-          _passwordC.clear();
-          _firstNameC.clear();
-          _lastNameC.clear();
-          _phoneC.clear();
-          _rankC.clear();
-          _emailC.text = savedEmail;
-        });
+        // After registration, go straight to verification screen
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => const EmailVerificationScreen()));
       } else {
         setState(() => _error = auth.error ?? 'Registration failed.');
       }
@@ -130,199 +129,109 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                         filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            color: _s1,
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(24),
+                              bottomRight: Radius.circular(24),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // Top highlight
-                              Container(height: 1, decoration: const BoxDecoration(
-                                gradient: LinearGradient(colors: [Colors.transparent, _cyan, Colors.transparent])
-                              )),
-                              Padding(
-                                padding: const EdgeInsets.all(40),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => Navigator.pop(context),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.arrow_back, color: Color(0xFF94A3B8), size: 16),
-                                          const SizedBox(width: 8),
-                                          Text('Back',
-                                              style: GoogleFonts.instrumentSans(
-                                                  color: const Color(0xFF94A3B8), fontSize: 13)),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 32),
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: 8, height: 8,
-                                          decoration: const BoxDecoration(
-                                            color: _cyan,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [BoxShadow(color: _cyan, blurRadius: 10)]
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text('STUDENT NODE',
-                                            style: GoogleFonts.jetBrainsMono(
-                                                fontSize: 10,
-                                                color: _cyan,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 2.0)),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                        _isLogin ? 'Initialize\nSession' : 'Initialize\nNode',
-                                        style: GoogleFonts.syne(
-                                            fontSize: 36,
-                                            fontWeight: FontWeight.w800,
-                                            height: 1.1,
-                                            color: Colors.white)),
-                                    const SizedBox(height: 32),
-                                    Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                          color: Colors.black.withValues(alpha: 0.3),
-                                          borderRadius: BorderRadius.circular(16)),
-                                      child: Row(children: [
-                                          LoginTab(
-                                            label: 'Authenticate',
-                                            active: _isLogin,
-                                            color: _cyan,
-                                            onTap: () => setState(() {
-                                                  _isLogin = true; _error = ''; _success = '';
-                                                  context.read<AuthProvider>().clearError();
-                                                })),
-                                        LoginTab(
-                                            label: 'New Node',
-                                            active: !_isLogin,
-                                            color: _cyan,
-                                            onTap: () => setState(() {
-                                                  _isLogin = false; _error = ''; _success = '';
-                                                  context.read<AuthProvider>().clearError();
-                                                })),
-                                      ]),
-                                    ),
-                                    const SizedBox(height: 32),
-                                    if (!_isLogin) ...[
-                                      Row(children: [
-                                        Expanded(
-                                            child: LoginField(label: 'FIRST NAME', controller: _firstNameC, accent: _cyan)),
-                                        const SizedBox(width: 16),
-                                        Expanded(
-                                            child: LoginField(label: 'LAST NAME', controller: _lastNameC, accent: _cyan)),
-                                      ]),
-                                      const SizedBox(height: 16),
-                                      LoginField(label: 'PHONE (+91)', controller: _phoneC, accent: _cyan, keyboardType: TextInputType.phone),
-                                      const SizedBox(height: 16),
-                                      LoginField(label: 'JEE RANK', controller: _rankC, accent: _cyan, keyboardType: TextInputType.number),
-                                      const SizedBox(height: 16),
-                                    ],
-                                    AutofillGroup(
-                                      child: Column(
-                                        children: [
-                                          LoginField(
-                                            label: 'EMAIL ADDRESS', 
-                                            controller: _emailC, 
-                                            accent: _cyan, 
-                                            keyboardType: TextInputType.emailAddress,
-                                            autofillHints: const [AutofillHints.email],
-                                          ),
-                                          const SizedBox(height: 16),
-                                          LoginField(
-                                            label: 'ENCRYPTION KEY (PASSWORD)',
-                                            controller: _passwordC,
-                                            accent: _cyan,
-                                            obscure: _obscure,
-                                            autofillHints: const [AutofillHints.password],
-                                            suffix: GestureDetector(
-                                              onTap: () => setState(() => _obscure = !_obscure),
-                                              child: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
-                                                  size: 18, color: const Color(0xFF94A3B8)),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (_isLogin) ...[
-                                      const SizedBox(height: 8),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: TextButton(
-                                          onPressed: _forgotPassword,
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: _cyan,
-                                            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-                                            minimumSize: Size.zero,
-                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          ),
-                                          child: Text('Forgot Password?',
-                                              style: GoogleFonts.instrumentSans(fontSize: 12, fontWeight: FontWeight.w600)),
-                                        ),
-                                      ),
-                                    ],
-                                    if (_error.isNotEmpty) ...[
-                                      const SizedBox(height: 16),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                        decoration: BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3))),
-                                        child: Row(children: [
-                                          const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 16),
-                                          const SizedBox(width: 8),
-                                          Expanded(child: Text(_error, style: GoogleFonts.instrumentSans(color: const Color(0xFFEF4444), fontSize: 13))),
-                                        ]),
-                                      ),
-                                    ],
-                                    if (_success.isNotEmpty) ...[
-                                      const SizedBox(height: 16),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                        decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3))),
-                                        child: Row(children: [
-                                          const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 16),
-                                          const SizedBox(width: 8),
-                                          Expanded(child: Text(_success, style: GoogleFonts.instrumentSans(color: const Color(0xFF10B981), fontSize: 13))),
-                                        ]),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 40),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 56,
-                                      child: ElevatedButton(
-                                        onPressed: authLoading ? null : _submit,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: _cyan,
-                                          foregroundColor: Colors.black,
-                                          shadowColor: _cyan.withValues(alpha: 0.5),
-                                          elevation: 8,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        ),
-                                        child: authLoading
-                                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                                            : Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Text(
-                                                    _isLogin ? 'EXECUTE LOGIN' : 'INITIALIZE NODE',
-                                                    style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 1.5),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  const Icon(Icons.arrow_forward_rounded, size: 18),
-                                                ],
-                                              ),
-                                      ),
-                                    ),
-                                  ],
+                              GestureDetector(
+                                onTap: () => Navigator.pop(context),
+                                child: Text('← Back',
+                                    style: GoogleFonts.instrumentSans(color: _t3, fontSize: 13)),
+                              ),
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _cyan.withValues(alpha: 0.12),
+                                  border: Border.all(color: _cyan.withValues(alpha: 0.25)),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text('STUDENT',
+                                    style: GoogleFonts.jetBrainsMono(
+                                        fontSize: 10, color: _cyan,
+                                        fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(_isLogin ? 'Welcome back' : 'Create account',
+                                  style: GoogleFonts.syne(
+                                      fontSize: 28, fontWeight: FontWeight.w700,
+                                      color: Colors.white)),
+                              const SizedBox(height: 20),
+                              Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                    color: _s2, borderRadius: BorderRadius.circular(12)),
+                                child: Row(children: [
+                                  LoginTab(
+                                      label: 'Sign In', active: _isLogin, color: _cyan,
+                                      onTap: () => setState(() {
+                                        _isLogin = true; _error = ''; _success = '';
+                                        context.read<AuthProvider>().clearError();
+                                      })),
+                                  LoginTab(
+                                      label: 'Register', active: !_isLogin, color: _cyan,
+                                      onTap: () => setState(() {
+                                        _isLogin = false; _error = ''; _success = '';
+                                        context.read<AuthProvider>().clearError();
+                                      })),
+                                ]),
+                              ),
+                              const SizedBox(height: 20),
+                              if (!_isLogin) ...[
+                                Row(children: [
+                                  Expanded(child: LoginField(label: 'FIRST NAME', controller: _firstNameC, accent: _cyan)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: LoginField(label: 'LAST NAME', controller: _lastNameC, accent: _cyan)),
+                                ]),
+                                const SizedBox(height: 12),
+                                LoginField(label: 'PHONE', controller: _phoneC, accent: _cyan, keyboardType: TextInputType.phone),
+                                const SizedBox(height: 12),
+                                LoginField(label: 'JEE RANK', controller: _rankC, accent: _cyan, keyboardType: TextInputType.number),
+                                const SizedBox(height: 12),
+                              ],
+                              LoginField(label: 'EMAIL', controller: _emailC, accent: _cyan, keyboardType: TextInputType.emailAddress),
+                              const SizedBox(height: 12),
+                              LoginField(
+                                label: 'PASSWORD', controller: _passwordC,
+                                accent: _cyan, obscure: _obscure,
+                                suffix: GestureDetector(
+                                  onTap: () => setState(() => _obscure = !_obscure),
+                                  child: Icon(_obscure ? Icons.visibility_off : Icons.visibility, size: 18, color: _t3),
+                                ),
+                              ),
+                              if (_error.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Text(_error,
+                                    style: GoogleFonts.instrumentSans(color: const Color(0xFFF87171), fontSize: 13),
+                                    textAlign: TextAlign.center),
+                              ],
+                              if (_success.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Text(_success,
+                                    style: GoogleFonts.instrumentSans(color: const Color(0xFF00E676), fontSize: 13),
+                                    textAlign: TextAlign.center),
+                              ],
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                width: double.infinity, height: 50,
+                                child: ElevatedButton(
+                                  onPressed: authLoading ? null : _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _cyan, foregroundColor: Colors.black,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 0,
+                                  ),
+                                  child: authLoading
+                                      ? const SizedBox(width: 20, height: 20,
+                                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                                      : Text(_isLogin ? 'Sign In →' : 'Create Account →',
+                                          style: GoogleFonts.instrumentSans(fontWeight: FontWeight.w700, fontSize: 15)),
                                 ),
                               ),
                             ],
