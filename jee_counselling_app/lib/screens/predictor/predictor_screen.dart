@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'provider/predictor_provider.dart';
 import 'models/prediction_model.dart';
+import '../../providers/auth_provider.dart';
 
 class PredictorScreen extends StatelessWidget {
   const PredictorScreen({super.key});
@@ -162,7 +163,8 @@ class _PredictorBodyState extends State<_PredictorBody> {
                               return;
                             }
                             provider.setRank(rank);
-                            await provider.generatePredictions();
+                            final user = context.read<AuthProvider>().currentUser;
+                            await provider.generatePredictions(userId: user?.id);
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _cyan,
@@ -208,9 +210,13 @@ class _PredictorBodyState extends State<_PredictorBody> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.all(16),
-                        itemCount: provider.results.length,
-                        itemBuilder: (_, i) =>
-                            _ResultCard(result: provider.results[i], index: i),
+                        itemCount: provider.results.length + 1, // +1 for the AI Card at the top
+                        itemBuilder: (_, i) {
+                          if (i == 0) {
+                            return _AiInsightCard(provider: provider);
+                          }
+                          return _ResultCard(result: provider.results[i - 1], index: i - 1);
+                        },
                       ),
           ),
         ],
@@ -376,6 +382,69 @@ class _ResultCard extends StatelessWidget {
                   color: Colors.white,
                   fontWeight: FontWeight.w600)),
         ]),
+      ),
+    );
+  }
+}
+
+// AI INSIGHT CARD
+class _AiInsightCard extends StatelessWidget {
+  final PredictorProvider provider;
+  const _AiInsightCard({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.isAiLoading) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D1117), // Match ResultCard bg
+          border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(color: Color(0xFF00E5FF), strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text("Gemini is analyzing your options...", 
+              style: GoogleFonts.instrumentSans(color: const Color(0xFF00E5FF), fontSize: 13, fontStyle: FontStyle.italic)),
+          ],
+        ),
+      );
+    }
+
+    if (provider.aiInsight == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1117), 
+        border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF00E5FF).withValues(alpha: 0.05), blurRadius: 10, spreadRadius: 2)
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome, color: Color(0xFF00E5FF), size: 18),
+              const SizedBox(width: 8),
+              Text("Gemini Insight", 
+                style: GoogleFonts.syne(color: const Color(0xFF00E5FF), fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(provider.aiInsight!, 
+            style: GoogleFonts.instrumentSans(color: Colors.white70, fontSize: 14, height: 1.4)),
+        ],
       ),
     );
   }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/connection_provider.dart';
@@ -11,6 +14,11 @@ import 'screens/role_selection_screen.dart'; // Re-added your role selection scr
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const MyApp());
 }
 
@@ -27,6 +35,35 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'JEE Guide',
         debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xff1E3A8A),
+            primary: const Color(0xff1E3A8A),
+          ),
+          textTheme: GoogleFonts.poppinsTextTheme(),
+          scaffoldBackgroundColor: Colors.grey.shade50,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            iconTheme: IconThemeData(color: Colors.black87),
+            titleTextStyle: TextStyle(
+              color: Colors.black87,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xff1E3A8A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+            ),
+          ),
+        ),
         home: const _AppEntry(),
         onGenerateRoute: (settings) {
           switch (settings.name) {
@@ -36,6 +73,7 @@ class MyApp extends StatelessWidget {
                 builder: (_) => VideoCallScreen(
                   channelName: args['channelName'],
                   otherName: args['otherName'],
+                  callId: args['callId'],
                 ),
               );
             case '/chat':

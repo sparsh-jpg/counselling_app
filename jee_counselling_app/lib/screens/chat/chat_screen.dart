@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math';
 import '../../screens/mentors/models/connection_model.dart';
 import '../../services/storage_service.dart';
@@ -26,22 +27,130 @@ class _ChatScreenState extends State<ChatScreen> {
   final StorageService _storage = StorageService();
   final TextEditingController _msgCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
-  List<ChatMessage> _messages = [];
-  bool _loading = true;
+
+  // ─── Real-time Firestore stream ────────────────────────────────
+  late final Stream<QuerySnapshot> _msgStream;
 
   @override
   void initState() {
     super.initState();
-    _loadMessages();
+    // Subscribe to live updates — any new message written to Firestore
+    // will instantly push to this stream and rebuild the UI.
+    _msgStream = FirebaseFirestore.instance
+        .collection('messages')
+        .where('connectionId', isEqualTo: widget.connection.id)
+        .snapshots();
+
+    // Also signal a call invite listener — see video call invite overlay
+    _listenForCallInvite();
   }
 
-  Future<void> _loadMessages() async {
-    final msgs = await _storage.getMessages(widget.connection.id);
-    setState(() {
-      _messages = msgs;
-      _loading = false;
+  void _listenForCallInvite() {
+    FirebaseFirestore.instance
+        .collection('call_signals')
+        .where('toUserId', isEqualTo: widget.currentUserId)
+        .where('connectionId', isEqualTo: widget.connection.id)
+        .where('status', isEqualTo: 'ringing')
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      if (snapshot.docs.isNotEmpty) {
+        final callDoc = snapshot.docs.first;
+        final callerName = callDoc['callerName'] ?? widget.otherName;
+        final channelName = callDoc['channelName'] ?? '';
+        _showIncomingCallDialog(callDoc.id, callerName, channelName);
+      }
     });
-    _scrollToBottom();
+  }
+
+  void _showIncomingCallDialog(String callId, String callerName, String channelName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF12121F),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            CircleAvatar(
+              radius: 36,
+              backgroundColor: const Color(0xFF00E5CC).withOpacity(0.2),
+              child: Text(
+                callerName[0].toUpperCase(),
+                style: GoogleFonts.poppins(
+                    color: const Color(0xFF00E5CC),
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Incoming Video Call',
+                style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)),
+            const SizedBox(height: 4),
+            Text(callerName,
+                style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      // Mark call as declined
+                      await FirebaseFirestore.instance
+                          .collection('call_signals')
+                          .doc(callId)
+                          .update({'status': 'declined'});
+                      if (mounted) Navigator.pop(context);
+                    },
+                    icon: const Icon(Icons.call_end, size: 18),
+                    label: Text('Decline', style: GoogleFonts.poppins()),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      // Mark call as accepted
+                      await FirebaseFirestore.instance
+                          .collection('call_signals')
+                          .doc(callId)
+                          .update({'status': 'accepted'});
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                      Navigator.pushNamed(
+                        context,
+                        '/video-call',
+                        arguments: {
+                          'channelName': channelName,
+                          'otherName': callerName,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.videocam, size: 18),
+                    label: Text('Accept', style: GoogleFonts.poppins()),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF22C55E),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -72,8 +181,43 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     await _storage.saveMessage(msg);
-    setState(() => _messages.add(msg));
     _scrollToBottom();
+  }
+
+  Future<void> _initiateVideoCall() async {
+    final channelName = 'jee_${widget.connection.id}';
+    final callId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // Determine the other person's ID
+    final otherUserId = widget.currentUserId == widget.connection.studentId
+        ? widget.connection.mentorId
+        : widget.connection.studentId;
+
+    // Write a call signal to Firestore — the other device is listening
+    await FirebaseFirestore.instance
+        .collection('call_signals')
+        .doc(callId)
+        .set({
+      'callId': callId,
+      'callerName': widget.currentUserName,
+      'toUserId': otherUserId,
+      'connectionId': widget.connection.id,
+      'channelName': channelName,
+      'status': 'ringing',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Caller navigates straight into the call
+    if (!mounted) return;
+    Navigator.pushNamed(
+      context,
+      '/video-call',
+      arguments: {
+        'channelName': channelName,
+        'otherName': widget.otherName,
+        'callId': callId,
+      },
+    );
   }
 
   @override
@@ -117,7 +261,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
                         fontSize: 14)),
-                Text('Online',
+                Text('Live',
                     style: GoogleFonts.poppins(
                         color: const Color(0xFF22C55E), fontSize: 10)),
               ],
@@ -128,36 +272,46 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             icon: const Icon(Icons.videocam_outlined,
                 color: Color(0xFF00E5CC)),
-            onPressed: () => Navigator.pushNamed(
-              context,
-              '/video-call',
-              arguments: {
-                'channelName': 'jee_${widget.connection.id}',
-                'otherName': widget.otherName,
-              },
-            ),
+            onPressed: _initiateVideoCall,
           ),
         ],
       ),
       body: Column(
         children: [
+          // ─── Real-time message list via StreamBuilder ───────────
           Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                        color: Color(0xFF00E5CC)))
-                : _messages.isEmpty
-                    ? _buildEmptyChat()
-                    : ListView.builder(
-                        controller: _scrollCtrl,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, i) => _MessageBubble(
-                          message: _messages[i],
-                          isMe: _messages[i].senderId ==
-                              widget.currentUserId,
-                        ),
-                      ),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _msgStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                      child: CircularProgressIndicator(
+                          color: Color(0xFF00E5CC)));
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isEmpty) return _buildEmptyChat();
+
+                // Sort by sentAt locally (no composite index needed)
+                final messages = docs.map((d) {
+                  return ChatMessage.fromJson(d.data() as Map<String, dynamic>);
+                }).toList()
+                  ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
+
+                // Auto-scroll on new message
+                _scrollToBottom();
+
+                return ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: messages.length,
+                  itemBuilder: (context, i) => _MessageBubble(
+                    message: messages[i],
+                    isMe: messages[i].senderId == widget.currentUserId,
+                  ),
+                );
+              },
+            ),
           ),
 
           // Input bar

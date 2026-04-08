@@ -222,9 +222,16 @@ class _MentorCard extends StatelessWidget {
       status = conn?.status;
     }
 
+    // Generate a consistent pseudo-random rating and review count from mentor ID
+    final int hash = mentor.id.hashCode.abs();
+    final double rating = 4.0 + ((hash % 10) / 10.0); // 4.0 to 4.9
+    final int reviews = 10 + (hash % 150); // 10 to 159
+
+    // Generate an innovative handle
+    final String handle = '@${mentor.name.replaceAll(RegExp(r'\s+'), '').toLowerCase()}_${mentor.college?.split(' ').first.toLowerCase() ?? 'x'}';
+
     return GestureDetector(
       onTap: () {
-        // CHANGED: Added a snackbar temporarily since MentorDetailScreen doesn't exist yet!
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Mentor detail screen coming soon!',
@@ -232,124 +239,142 @@ class _MentorCard extends StatelessWidget {
             backgroundColor: const Color(0xFF00E5CC).withOpacity(0.9),
           ),
         );
-        
-        // UNCOMMENT THIS ONCE YOU CREATE mentor_detail_screen.dart
-        // Navigator.push(
-        //   context,
-        //   MaterialPageRoute(
-        //       builder: (_) => MentorDetailScreen(mentor: mentor)),
-        // );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF12121F),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          color: const Color(0xFF131320),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.04), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00E5CC).withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _avatar(),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(mentor.name,
-                            style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15)),
-                        Text(mentor.college ?? '',
-                            style: GoogleFonts.poppins(
-                                color: const Color(0xFF00E5CC),
-                                fontSize: 12,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(mentor.name,
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.verified, color: Color(0xFF00E5CC), size: 16),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(handle,
+                            style: GoogleFonts.jetBrainsMono(
+                                color: const Color(0xFF00E5CC).withOpacity(0.8),
+                                fontSize: 11,
                                 fontWeight: FontWeight.w500)),
-                        Text(mentor.branch ?? '',
+                        const SizedBox(height: 4),
+                        Text('${mentor.college ?? "Unknown"} • ${mentor.branch ?? "General"}',
                             style: GoogleFonts.poppins(
-                                color: Colors.white38, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF22C55E).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                            width: 5,
-                            height: 5,
-                            decoration: const BoxDecoration(
-                                color: Color(0xFF22C55E),
-                                shape: BoxShape.circle)),
-                        const SizedBox(width: 4),
-                        Text('Available',
-                            style: GoogleFonts.poppins(
-                                fontSize: 9,
-                                color: const Color(0xFF22C55E),
-                                fontWeight: FontWeight.w500)),
+                                color: Colors.white60, fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
-              // Stats
-              Row(
-                children: [
-                  const Text('🏆', style: TextStyle(fontSize: 12)),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${mentor.mentorJeeType ?? "JEE Main"} AIR ${_fmt(mentor.mentorJeeRank ?? 0)}',
-                    style: GoogleFonts.poppins(
-                        color: Colors.white54, fontSize: 11),
-                  ),
-                  const SizedBox(width: 12),
-                  const Icon(Icons.star_rounded,
-                      color: Color(0xFFF59E0B), size: 14),
-                  const SizedBox(width: 3),
-                  Text('4.8',
-                      style: GoogleFonts.poppins(
-                          color: Colors.white54, fontSize: 11)),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: (mentor.sessionPrice ?? 0) == 0
-                              ? const Color(0xFF22C55E)
-                              : const Color(0xFF00E5CC)),
-                      borderRadius: BorderRadius.circular(20),
+              // Stats Box
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.02),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.leaderboard_rounded, color: Colors.white54, size: 14),
+                            const SizedBox(width: 6),
+                            Text('JEE Rank', style: GoogleFonts.poppins(color: Colors.white54, fontSize: 11)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${mentor.mentorJeeType ?? "Mains"} AIR ${_fmt(mentor.mentorJeeRank ?? 0)}',
+                          style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      (mentor.sessionPrice ?? 0) == 0
-                          ? 'FREE'
-                          : '₹${mentor.sessionPrice}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: (mentor.sessionPrice ?? 0) == 0
-                            ? const Color(0xFF22C55E)
-                            : const Color(0xFF00E5CC),
-                      ),
+                    Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 14),
+                            const SizedBox(width: 6),
+                            Text('Rating', style: GoogleFonts.poppins(color: Colors.white54, fontSize: 11)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${rating.toStringAsFixed(1)} ($reviews)',
+                          style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    Container(width: 1, height: 30, color: Colors.white.withOpacity(0.1)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.electric_bolt_rounded, color: Color(0xFF22C55E), size: 14),
+                            const SizedBox(width: 6),
+                            Text('Fee', style: GoogleFonts.poppins(color: Colors.white54, fontSize: 11)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          (mentor.sessionPrice ?? 0) == 0 ? 'FREE' : '₹${mentor.sessionPrice}',
+                          style: GoogleFonts.poppins(
+                            color: (mentor.sessionPrice ?? 0) == 0 ? const Color(0xFF22C55E) : const Color(0xFF00E5CC),
+                            fontWeight: FontWeight.w700, 
+                            fontSize: 13
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
               // Expertise
               if (mentor.expertise.isNotEmpty)
