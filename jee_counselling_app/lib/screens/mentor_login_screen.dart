@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import 'mentors/models/app_user_model.dart';
 import 'mentor_dashboard/mentor_dashboard_screen.dart';
@@ -26,11 +28,7 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
   String _success = '';
   bool _obscure = true;
 
-  static const _orange = Color(0xFFFF6240);
-  static const _bg = Color(0xFF060912);
-  static const _s1 = Color(0xFF0D1117);
-  static const _s2 = Color(0xFF111827);
-  static const _t3 = Color(0xFF4D5B73);
+  static const _orange = Color(0xFF7C3AED);
 
   void _submit() async {
     setState(() { _error = ''; _success = ''; });
@@ -47,7 +45,6 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
         password: _passwordC.text.trim(),
         expectedRole: UserRole.mentor,
       );
-
       if (!mounted) return;
 
       if (success) {
@@ -76,7 +73,6 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
         role: UserRole.mentor,
         college: _collegeC.text.trim(),
       );
-
       if (!mounted) return;
 
       if (success) {
@@ -89,35 +85,48 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
     }
   }
 
+  void _forgotPassword() async {
+    final email = _emailC.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Please enter your email to reset password.');
+      return;
+    }
+    
+    final auth = context.read<AuthProvider>();
+    final success = await auth.resetPassword(email);
+    
+    if (!mounted) return;
+    if (success) {
+      setState(() {
+        _success = 'Password reset email sent. Please check your inbox.';
+        _error = '';
+      });
+    } else {
+      setState(() => _error = auth.error ?? 'Failed to send reset email.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          CustomPaint(painter: LoginGridPainter(), child: const SizedBox.expand()),
+          const LoginAIBg(accentColor: _orange),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Column(
-                      children: [
-                        Container(
-                          height: 3,
-                          decoration: const BoxDecoration(
-                            color: _orange,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(24),
-                              topRight: Radius.circular(24),
-                            ),
-                          ),
-                        ),
-                        Container(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                        child: Container(
                           decoration: BoxDecoration(
                             color: _s1,
                             border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
@@ -126,9 +135,8 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
                               bottomRight: Radius.circular(24),
                             ),
                           ),
-                          padding: const EdgeInsets.all(32),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               GestureDetector(
                                 onTap: () => Navigator.pop(context),
@@ -228,7 +236,7 @@ class _MentorLoginScreenState extends State<MentorLoginScreen> {
                             ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

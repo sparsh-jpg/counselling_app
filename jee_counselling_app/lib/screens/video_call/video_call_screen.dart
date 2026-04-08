@@ -13,17 +13,20 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-const String _agoraAppId = 'YOUR_AGORA_APP_ID'; // ← replace this
+const String _agoraAppId = 'f8c840a984c54457b1f0e7c713cae746';
 
 class VideoCallScreen extends StatefulWidget {
   final String channelName;
   final String otherName;
+  final String? callId; // Used to clean up the call signal on end
 
   const VideoCallScreen({
     super.key,
     required this.channelName,
     required this.otherName,
+    this.callId,
   });
 
   @override
@@ -98,6 +101,17 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   Future<void> _leaveCall() async {
     await _engine?.leaveChannel();
     await _engine?.release();
+    
+    // Mark the call signal as ended so receiver dialog dismisses
+    if (widget.callId != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('call_signals')
+            .doc(widget.callId)
+            .update({'status': 'ended'});
+      } catch (_) {}
+    }
+    
     if (!mounted) return;
     Navigator.pop(context);
   }

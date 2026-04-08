@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+import 'dart:ui';
 import '../providers/auth_provider.dart';
 import 'mentors/models/app_user_model.dart';
 import 'dashboard/dashboard_screen.dart';
@@ -27,10 +29,6 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
   bool _obscure = true;
 
   static const _cyan = Color(0xFF00E5FF);
-  static const _bg = Color(0xFF060912);
-  static const _s1 = Color(0xFF0D1117);
-  static const _s2 = Color(0xFF111827);
-  static const _t3 = Color(0xFF4D5B73);
 
   void _submit() async {
     setState(() { _error = ''; _success = ''; });
@@ -47,7 +45,6 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
         password: _passwordC.text.trim(),
         expectedRole: UserRole.student,
       );
-
       if (!mounted) return;
 
       if (success) {
@@ -65,7 +62,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
     } else {
       if (_firstNameC.text.isEmpty || _lastNameC.text.isEmpty ||
           _emailC.text.isEmpty || _rankC.text.isEmpty ||
-          _passwordC.text.isEmpty) {
+          _passwordC.text.isEmpty || _phoneC.text.isEmpty) {
         setState(() => _error = 'Please fill in all required fields.');
         return;
       }
@@ -77,7 +74,6 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
         role: UserRole.student,
         jeeRank: int.tryParse(_rankC.text.trim()),
       );
-
       if (!mounted) return;
 
       if (success) {
@@ -90,35 +86,48 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
     }
   }
 
+  void _forgotPassword() async {
+    final email = _emailC.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Please enter your email to reset password.');
+      return;
+    }
+    
+    final auth = context.read<AuthProvider>();
+    final success = await auth.resetPassword(email);
+    
+    if (!mounted) return;
+    if (success) {
+      setState(() {
+        _success = 'Password reset email sent. Please check your inbox.';
+        _error = '';
+      });
+    } else {
+      setState(() => _error = auth.error ?? 'Failed to send reset email.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          CustomPaint(painter: LoginGridPainter(), child: const SizedBox.expand()),
+          const LoginAIBg(accentColor: _cyan),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Column(
-                      children: [
-                        Container(
-                          height: 3,
-                          decoration: const BoxDecoration(
-                            color: _cyan,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(24),
-                              topRight: Radius.circular(24),
-                            ),
-                          ),
-                        ),
-                        Container(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                        child: Container(
                           decoration: BoxDecoration(
                             color: _s1,
                             border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
@@ -127,9 +136,8 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                               bottomRight: Radius.circular(24),
                             ),
                           ),
-                          padding: const EdgeInsets.all(32),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               GestureDetector(
                                 onTap: () => Navigator.pop(context),
@@ -229,7 +237,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                             ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

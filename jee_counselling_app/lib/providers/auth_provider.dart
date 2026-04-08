@@ -12,6 +12,9 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   bool _isInitialized = false;
 
+  String? _verificationId;
+  String? get verificationId => _verificationId;
+
   AppUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -28,6 +31,157 @@ class AuthProvider extends ChangeNotifier {
     }
     _isInitialized = true;
     notifyListeners();
+  }
+
+  Future<bool> sendPhoneOTP(String phoneNumber) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    Completer<bool> completer = Completer<bool>();
+
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          // Auto-resolve on Android
+          await FirebaseAuth.instance.signInWithCredential(credential);
+          _isLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete(true);
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          _error = e.message;
+          _isLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete(false);
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          _verificationId = verificationId;
+          _isLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete(true);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _verificationId = verificationId;
+        },
+      );
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      if (!completer.isCompleted) completer.complete(false);
+    }
+    return completer.future;
+  }
+
+  Future<bool> sendEmailOTP(String email) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // ---------------------------------------------------------
+      // DEVELOPMENT MOCK
+      // In a real production app, you MUST uncomment and configure 
+      // the EmailOTP settings below with a real SMTP server.
+      // For now, we mock the sending so you can test the UI.
+      // ---------------------------------------------------------
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network request
+      
+      /*
+      EmailOTP.config(
+        appName: 'JEE Counselling App',
+        otpType: OTPType.numeric,
+        emailTheme: EmailTheme.v1,
+      );
+      
+      EmailOTP.setSMTP(
+        host: 'smtp.gmail.com',
+        emailPort: EmailPort.port587,
+        secureType: SecureType.tls,
+        username: 'your-email@gmail.com',
+        password: 'your-app-password',
+      );
+
+      bool res = await EmailOTP.sendOTP(email: email);
+      if (!res) {
+        _error = 'Failed to send OTP to $email. Ensure SMTP is configured in auth_provider.dart.';
+      }
+      return res;
+      */
+
+      _isLoading = false;
+      notifyListeners();
+      return true; // Always return true for development
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> verifyEmailOTP(String otp) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // ---------------------------------------------------------
+      // DEVELOPMENT MOCK
+      // Accept '123456' as the universal test OTP.
+      // ---------------------------------------------------------
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      bool res = otp.trim() == '123456';
+      
+      /*
+      // Production code:
+      bool res = EmailOTP.verifyOTP(otp: otp);
+      */
+      
+      if (!res) {
+        _error = 'Invalid OTP. For testing purposes, please enter: 123456';
+      }
+      _isLoading = false;
+      notifyListeners();
+      return res;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> verifyOTP(String otp) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      if (_verificationId == null) {
+        _error = 'Verification ID is null. Request OTP first.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      PhoneAuthCredential credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode: otp,
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      _error = e.message;
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<bool> register({

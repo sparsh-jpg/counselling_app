@@ -108,39 +108,6 @@ class MentorProvider extends ChangeNotifier {
   }
 
   List<Mentor> _getMockMentors() {
-    return [
-      const Mentor(
-        id: '1',
-        name: 'Veenu Kaushik',
-        college: 'NIT Jalandhar',
-        branch: 'Electronics & Communication',
-        year: 3,
-        rating: 4.8,
-        reviewCount: 34,
-        bio: 'NIT Jalandhar ECE student with JEE Main rank 19,480. I help students understand NIT counselling, JoSAA process, and ECE branch prospects. Feel free to connect!',
-        expertise: ['JoSAA Counselling', 'ECE Branch', 'NIT Admission', 'Category Counselling'],
-        avatarUrl: '',
-        isAvailable: true,
-        sessionPrice: 0,
-        jeeRank: 19480,
-        jeeType: 'JEE Main',
-      ),
-      const Mentor(
-        id: '2',
-        name: 'Tarun Singh',
-        college: 'NIT Jalandhar',
-        branch: 'Computer Science Engineering',
-        year: 3,
-        rating: 4.9,
-        reviewCount: 51,
-        bio: 'NIT Jalandhar CSE student with JEE Main rank 9,340. Expert in college selection, JoSAA rounds, and CS branch guidance. Happy to help you navigate your JEE journey!',
-        expertise: ['JoSAA', 'CS Branch', 'NIT Jalandhar', 'College Selection'],
-        avatarUrl: '',
-        isAvailable: true,
-        sessionPrice: 0,
-        jeeRank: 9340,
-        jeeType: 'JEE Main',
-      ),
-    ];
+    return [];
   }
 }
